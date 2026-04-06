@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Google Ads Daily Monitor</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5;color:#1a1a2e;min-height:100vh}
+  .topbar{background:#1a1a2e;color:#fff;padding:14px 24px;display:flex;align-items:center;justify-content:space-between}
+  .topbar h1{font-size:16px;font-weight:600;letter-spacing:.3px}
+  .topbar .meta{font-size:12px;color:#8a8fa8}
+  .refresh-btn{background:#3b82f6;color:#fff;border:none;padding:6px 14px;border-radius:6px;font-size:12px;cursor:pointer;font-weight:500}
+  .refresh-btn:hover{background:#2563eb}
+  .tabs{background:#fff;border-bottom:1px solid #e5e7eb;display:flex;gap:0;overflow-x:auto;padding:0 24px}
+  .tab{padding:12px 18px;font-size:13px;font-weight:500;cursor:pointer;border-bottom:2px solid transparent;color:#6b7280;white-space:nowrap;transition:all .2s}
+  .tab.active{border-bottom-color:#3b82f6;color:#3b82f6}
+  .tab:hover:not(.active){color:#374151;border-bottom-color:#d1d5db}
+  .content{padding:20px 24px;max-width:1400px;margin:0 auto}
+  .page{display:none}.page.active{display:block}
+  .kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:20px}
+  .kpi{background:#fff;border-radius:10px;padding:16px;border:1px solid #e5e7eb;position:relative;overflow:hidden}
+  .kpi::before{content:'';position:absolute;top:0;left:0;width:4px;height:100%;background:var(--accent,#3b82f6)}
+  .kpi-label{font-size:11px;color:#6b7280;font-weight:500;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+  .kpi-value{font-size:28px;font-weight:700;color:var(--accent,#1a1a2e);line-height:1}
+  .kpi-sub{font-size:11px;color:#9ca3af;margin-top:4px}
+  .kpi.red{--accent:#ef4444}.kpi.amber{--accent:#f59e0b}.kpi.green{--accent:#10b981}.kpi.blue{--accent:#3b82f6}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px}
+  .grid3{display:grid;grid-template-columns:2fr 1fr;gap:16px;margin-bottom:20px}
+  @media(max-width:768px){.grid2,.grid3{grid-template-columns:1fr}}
+  .card{background:#fff;border-radius:10px;padding:16px;border:1px solid #e5e7eb}
+  .card-title{font-size:13px;font-weight:600;color:#374151;margin-bottom:14px;display:flex;align-items:center;gap:6px}
+  .card-title .dot{width:8px;height:8px;border-radius:50%;background:var(--dot,#3b82f6);flex-shrink:0}
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  th{text-align:left;padding:8px 10px;background:#f9fafb;color:#6b7280;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid #e5e7eb;position:sticky;top:0}
+  td{padding:8px 10px;border-bottom:1px solid #f3f4f6;color:#374151}
+  tr:hover td{background:#f9fafb}
+  .badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px}
+  .badge.critical{background:#fee2e2;color:#dc2626}
+  .badge.warning{background:#fef3c7;color:#d97706}
+  .badge.ok{background:#d1fae5;color:#059669}
+  .badge::before{content:'';width:5px;height:5px;border-radius:50%;background:currentColor}
+  .pct-red{color:#ef4444;font-weight:600}
+  .pct-amber{color:#f59e0b;font-weight:600}
+  .pct-green{color:#10b981;font-weight:600}
+  .loading{text-align:center;padding:60px;color:#9ca3af;font-size:14px}
+  .error-msg{text-align:center;padding:40px;color:#ef4444;font-size:13px;background:#fff;border-radius:10px;border:1px solid #fecaca}
+  .tbl-wrap{overflow-x:auto;max-height:380px;overflow-y:auto}
+  .chart-wrap{position:relative;height:220px}
+  .bar-mini{display:flex;flex-direction:column;gap:5px;margin-top:4px}
+  .bar-item{display:grid;grid-template-columns:110px 1fr 55px;align-items:center;gap:6px;font-size:11px}
+  .bar-name{color:#374151;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .bar-track{height:8px;background:#f3f4f6;border-radius:4px;overflow:hidden}
+  .bar-fill{height:100%;border-radius:4px;transition:width .6s ease}
+  .bar-val{text-align:right;font-weight:600;font-size:11px}
+  .section-divider{font-size:12px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.6px;margin:20px 0 12px;padding-bottom:6px;border-bottom:1px solid #e5e7eb}
+  .report-date{font-size:11px;background:#eff6ff;color:#3b82f6;padding:3px 8px;border-radius:4px;font-weight:500}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div>
+    <h1>📊 Google Ads Daily Monitor</h1>
+    <div class="meta" id="last-updated">Loading data...</div>
+  </div>
+  <button class="refresh-btn" onclick="loadAll()">⟳ Refresh</button>
+</div>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab(0)">Overview</div>
+  <div class="tab" onclick="switchTab(1)">Conversion Drop</div>
+  <div class="tab" onclick="switchTab(2)">Conv. Rate Drop</div>
+  <div class="tab" onclick="switchTab(3)">CPC & CTR Spike</div>
+  <div class="tab" onclick="switchTab(4)">Search Impression</div>
+  <div class="tab" onclick="switchTab(5)">Spend Surge</div>
+</div>
+
+<div class="content">
+
+  <!-- OVERVIEW PAGE -->
+  <div class="page active" id="page-0">
+    <div class="kpi-row" id="ov-kpis"><div class="loading">Loading KPIs...</div></div>
+    <div class="grid2">
+      <div class="card">
+        <div class="card-title"><span class="dot" style="--dot:#ef4444"></span>Top CPC Spike Campaigns</div>
+        <div class="bar-mini" id="ov-cpc-bars"><div class="loading" style="padding:20px">Loading...</div></div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="dot" style="--dot:#f59e0b"></span>Conversion Rate Drop</div>
+        <div class="bar-mini" id="ov-conv-bars"><div class="loading" style="padding:20px">Loading...</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title"><span class="dot" style="--dot:#ef4444"></span>Critical Alerts — CPC & CTR</div>
+      <div class="tbl-wrap"><table id="ov-alerts-table"><tr><td class="loading">Loading...</td></tr></table></div>
+    </div>
+  </div>
+
+  <!-- PAGE 1: CONVERSION DROP DECIMAL -->
+  <div class="page" id="page-1">
+    <div class="kpi-row" id="p1-kpis"></div>
+    <div class="grid3">
+      <div class="card">
+        <div class="card-title"><span class="dot" style="--dot:#ef4444"></span>Conversion Drop by Campaign (14-day %)</div>
+        <div class="chart-wrap"><canvas id="chart-conv-drop"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="dot" style="--dot:#ef4444"></span>Status Breakdown</div>
+        <div class="chart-wrap"><canvas id="chart-conv-status"></canvas></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title"><span class="dot" style="--dot:#ef4444"></span>Full Table — Conversion Drop</div>
+      <div class="tbl-wrap"><table id="table-conv-drop"></table></div>
+    </div>
+  </div>
+
+  <!-- PAGE 2: CONVERSION RATE DROP -->
+  <div class="page" id="page-2">
+    <div class="kpi-row" id="p2-kpis"></div>
+    <div class="grid2">
+      <div class="card">
+        <div class="card-title"><span class="dot" style="--dot:#f59e0b"></span>Change % by Campaign</div>
+        <div class="chart-wrap"><canvas id="chart-rate-drop"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="dot" style="--dot:#f59e0b"></span>Current vs Previous Rate</div>
+        <div class="chart-wrap"><canvas id="chart-rate-compare"></canvas></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title"><span class="dot" style="--dot:#f59e0b"></span>Full Table — Conversion Rate</div>
+      <div class="tbl-wrap"><table id="table-rate-drop"></table></div>
+    </div>
+  </div>
+
+  <!-- PAGE 3: CPC & CTR -->
+  <div class="page" id="page-3">
+    <div class="kpi-row" id="p3-kpis"></div>
+    <div class="grid2">
+      <div class="card">
+        <div class="card-title"><span class="dot" style="--dot:#ef4444"></span>CPC Spike % by Campaign</div>
+        <div class="chart-wrap"><canvas id="chart-cpc-spike"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="dot" style="--dot:#8b5cf6"></span>CTR Drop % by Campaign</div>
+        <div class="chart-wrap"><canvas id="chart-ctr-drop"></canvas></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title"><span class="dot" style="--dot:#ef4444"></span>Full Table — CPC & CTR</div>
+      <div class="tbl-wrap"><table id="table-cpc"></table></div>
+    </div>
+  </div>
+
+  <!-- PAGE 4: SEARCH IMPRESSION -->
+  <div class="page" id="page-4">
+    <div class="kpi-row" id="p4-kpis"></div>
+    <div class="grid3">
+      <div class="card">
+        <div class="card-title"><span class="dot" style="--dot:#8b5cf6"></span>Impression Drop % by Campaign</div>
+        <div class="chart-wrap"><canvas id="chart-impression"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="dot" style="--dot:#8b5cf6"></span>Current vs Previous (14-day)</div>
+        <div class="chart-wrap"><canvas id="chart-impression-compare"></canvas></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title"><span class="dot" style="--dot:#8b5cf6"></span>Full Table — Search Impression</div>
+      <div class="tbl-wrap"><table id="table-impression"></table></div>
+    </div>
+  </div>
+
+  <!-- PAGE 5: SPEND SURGE -->
+  <div class="page" id="page-5">
+    <div class="kpi-row" id="p5-kpis"></div>
+    <div class="grid2">
+      <div class="card">
+        <div class="card-title"><span class="dot" style="--dot:#10b981"></span>Spend Increase % by Campaign</div>
+        <div class="chart-wrap"><canvas id="chart-spend"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="dot" style="--dot:#10b981"></span>Current vs Previous Spend (7-day)</div>
+        <div class="chart-wrap"><canvas id="chart-spend-compare"></canvas></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title"><span class="dot" style="--dot:#10b981"></span>Full Table — Spend Surge</div>
+      <div class="tbl-wrap"><table id="table-spend"></table></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const SHEET_ID = '1-nZ6qco4oqK-AYOAcaJksiYBRtb-mtxexn-21XyQPQ4';
+const API_KEY = 'AIzaSyAo4CJt8heBUoxP5lTPT9TKa2goxHGM8Rg';
+const TABS = [
+  'Conversion drop Decimal',
+  'Conversion Drop Rate',
+  'CPC spike & Ctr drop - by 10% or more 14 by 14',
+  'Drop in Search Impression in 14 vs 14 days',
+  'Spend increase by 20 percent 7 by 7'
+];
+
+let allData = {};
+let charts = {};
+
+function sheetUrl(tab) {
+  return `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(tab)}?key=${API_KEY}`;
+}
+
+async function fetchSheet(tab) {
+  const r = await fetch(sheetUrl(tab));
+  const d = await r.json();
+  if (!d.values) return [];
+  const [headers, ...rows] = d.values;
+  return rows.map(row => {
+    const obj = {};
+    headers.forEach((h, i) => obj[h.trim()] = row[i] || '');
+    return obj;
+  });
+}
+
+function n(v) { return parseFloat(v) || 0; }
+
+function pctColor(v, inverse=false) {
+  const val = n(v);
+  if (inverse) {
+    if (val > 50) return 'pct-red';
+    if (val > 20) return 'pct-amber';
+    return 'pct-green';
+  }
+  if (val < -50) return 'pct-red';
+  if (val < -20) return 'pct-amber';
+  return 'pct-green';
+}
+
+function statusBadge(s) {
+  const cls = s === 'Critical' ? 'critical' : s === 'Warning' ? 'warning' : 'ok';
+  return `<span class="badge ${cls}">${s || 'OK'}</span>`;
+}
+
+function shortName(name, len=22) {
+  return name && name.length > len ? name.slice(0, len) + '…' : name;
+}
+
+function destroyChart(id) {
+  if (charts[id]) { charts[id].destroy(); delete charts[id]; }
+}
+
+function makeBarChart(id, labels, data, color='#ef4444', label='Value') {
+  destroyChart(id);
+  const ctx = document.getElementById(id);
+  if (!ctx) return;
+  charts[id] = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels.map(l => shortName(l, 16)),
+      datasets: [{ label, data, backgroundColor: color + 'cc', borderColor: color, borderWidth: 1, borderRadius: 4 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { color: '#f3f4f6' }, ticks: { font: { size: 10 } } },
+        y: { grid: { display: false }, ticks: { font: { size: 10 } } }
+      }
+    }
+  });
+}
+
+function makeGroupedChart(id, labels, d1, d2, l1, l2, c1='#3b82f6', c2='#e5e7eb') {
+  destroyChart(id);
+  const ctx = document.getElementById(id);
+  if (!ctx) return;
+  charts[id] = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels.map(l => shortName(l, 14)),
+      datasets: [
+        { label: l1, data: d1, backgroundColor: c1 + 'cc', borderRadius: 3 },
+        { label: l2, data: d2, backgroundColor: c2, borderRadius: 3 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { font: { size: 10 } } } },
+      scales: {
+        x: { grid: { display: false }, ticks: { font: { size: 9 } } },
+        y: { grid: { color: '#f3f4f6' }, ticks: { font: { size: 10 } } }
+      }
+    }
+  });
+}
+
+function makeDoughnut(id, labels, data, colors) {
+  destroyChart(id);
+  const ctx = document.getElementById(id);
+  if (!ctx) return;
+  charts[id] = new Chart(ctx, {
+    type: 'doughnut',
+    data: { labels, datasets: [{ data, backgroundColor: colors, borderWidth: 2 }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom', labels: { font: { size: 11 }, padding: 10 } } }
+    }
+  });
+}
+
+function kpiHTML(label, value, sub, cls='blue') {
+  return `<div class="kpi ${cls}"><div class="kpi-label">${label}</div><div class="kpi-value">${value}</div><div class="kpi-sub">${sub}</div></div>`;
+}
+
+function miniBars(rows, nameField, valField, color, suffix='%', maxRows=8) {
+  const sorted = [...rows].sort((a,b) => Math.abs(n(b[valField])) - Math.abs(n(a[valField]))).slice(0, maxRows);
+  const max = Math.max(...sorted.map(r => Math.abs(n(r[valField]))), 1);
+  return sorted.map(r => {
+    const val = n(r[valField]);
+    const pct = Math.abs(val) / max * 100;
+    return `<div class="bar-item">
+      <span class="bar-name" title="${r[nameField]}">${shortName(r[nameField], 15)}</span>
+      <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${color}"></div></div>
+      <span class="bar-val" style="color:${color}">${val.toFixed(1)}${suffix}</span>
+    </div>`;
+  }).join('');
+}
+
+// ── OVERVIEW ──
+function buildOverview() {
+  const conv = allData[TABS[0]] || [];
+  const rate = allData[TABS[1]] || [];
+  const cpc = allData[TABS[2]] || [];
+  const imp = allData[TABS[3]] || [];
+  const spend = allData[TABS[4]] || [];
+
+  const critical = cpc.filter(r => r.status === 'Critical').length;
+  const warning = cpc.filter(r => r.status === 'Warning').length;
+  const avgCpcSpike = cpc.length ? (cpc.reduce((s,r) => s + n(r.cpc_spike_pct), 0) / cpc.length).toFixed(1) : 0;
+  const avgConvDrop = rate.length ? (rate.reduce((s,r) => s + n(r.change_pct), 0) / rate.length).toFixed(1) : 0;
+  const reportDate = conv[0]?.report_date || cpc[0]?.report_date || 'Today';
+
+  document.getElementById('last-updated').textContent = `Report date: ${reportDate} · ${cpc.length + conv.length + imp.length + spend.length} total records`;
+
+  document.getElementById('ov-kpis').innerHTML = [
+    kpiHTML('Critical Campaigns', critical, `${warning} warnings`, 'red'),
+    kpiHTML('Avg CPC Spike', avgCpcSpike + '%', `across ${cpc.length} campaigns`, 'red'),
+    kpiHTML('Conv. Rate Drop', avgConvDrop + '%', `avg change across ${rate.length} campaigns`, 'amber'),
+    kpiHTML('Impression Drops', imp.length, 'campaigns flagged', 'blue'),
+    kpiHTML('Spend Surges', spend.length, 'campaigns ↑20%+', 'green'),
+  ].join('');
+
+  document.getElementById('ov-cpc-bars').innerHTML = miniBars(cpc, 'campaign_name', 'cpc_spike_pct', '#ef4444');
+  document.getElementById('ov-conv-bars').innerHTML = miniBars(rate, 'campaign_name', 'change_pct', '#f59e0b');
+
+  // alerts table
+  const top = [...cpc].sort((a,b) => n(b.cpc_spike_pct) - n(a.cpc_spike_pct)).slice(0, 10);
+  const tbl = document.getElementById('ov-alerts-table');
+  tbl.innerHTML = `<tr><th>Campaign</th><th>Status</th><th>CPC Spike %</th><th>CTR Drop %</th><th>Current Spend</th><th>Clicks</th></tr>` +
+    top.map(r => `<tr>
+      <td>${shortName(r.campaign_name, 30)}</td>
+      <td>${statusBadge(r.status)}</td>
+      <td class="${pctColor(r.cpc_spike_pct, true)}">${n(r.cpc_spike_pct).toFixed(1)}%</td>
+      <td class="${pctColor(r.ctr_drop_pct, true)}">${n(r.ctr_drop_pct).toFixed(1)}%</td>
+      <td>£${n(r.current_spend).toLocaleString()}</td>
+      <td>${r.current_clicks}</td>
+    </tr>`).join('');
+}
+
+// ── PAGE 1: CONV DROP ──
+function buildP1() {
+  const data = allData[TABS[0]] || [];
+  const critical = data.filter(r => r.status === 'Critical').length;
+  const avgDrop = data.length ? (data.reduce((s,r) => s + n(r.drop_pct), 0) / data.length).toFixed(1) : 0;
+
+  document.getElementById('p1-kpis').innerHTML = [
+    kpiHTML('Total Flagged', data.length, 'campaigns with conversion drop', 'blue'),
+    kpiHTML('Critical', critical, 'campaigns', 'red'),
+    kpiHTML('Avg Drop %', avgDrop + '%', '14-day vs 14-day', 'amber'),
+  ].join('');
+
+  const sorted = [...data].sort((a,b) => n(a.drop_pct) - n(b.drop_pct)).slice(0, 12);
+  makeBarChart('chart-conv-drop', sorted.map(r => r.campaign_name), sorted.map(r => n(r.drop_pct)), '#ef4444', 'Drop %');
+
+  const warn = data.filter(r => r.status === 'Warning').length;
+  makeDoughnut('chart-conv-status', ['Critical', 'Warning', 'Other'], [critical, warn, data.length - critical - warn], ['#ef4444', '#f59e0b', '#d1d5db']);
+
+  document.getElementById('table-conv-drop').innerHTML =
+    `<tr><th>Date</th><th>Campaign</th><th>Current 14d</th><th>Previous 14d</th><th>Drop %</th><th>Status</th></tr>` +
+    data.map(r => `<tr>
+      <td>${r.date || r.report_date || ''}</td>
+      <td>${shortName(r.campaign_name, 28)}</td>
+      <td>${n(r.current_14_days).toFixed(2)}</td>
+      <td>${n(r.previous_14_days).toFixed(2)}</td>
+      <td class="${pctColor(r.drop_pct, true)}">${n(r.drop_pct).toFixed(2)}%</td>
+      <td>${statusBadge(r.status)}</td>
+    </tr>`).join('');
+}
+
+// ── PAGE 2: CONV RATE ──
+function buildP2() {
+  const data = allData[TABS[1]] || [];
+  const avgChange = data.length ? (data.reduce((s,r) => s + n(r.change_pct), 0) / data.length).toFixed(1) : 0;
+  const fullDrop = data.filter(r => n(r.change_pct) === -100).length;
+
+  document.getElementById('p2-kpis').innerHTML = [
+    kpiHTML('Total Campaigns', data.length, 'with conv rate drop', 'blue'),
+    kpiHTML('Full Drop (-100%)', fullDrop, 'campaigns at zero', 'red'),
+    kpiHTML('Avg Rate Change', avgChange + '%', 'current period', 'amber'),
+  ].join('');
+
+  const sorted = [...data].sort((a,b) => n(a.change_pct) - n(b.change_pct)).slice(0, 12);
+  makeBarChart('chart-rate-drop', sorted.map(r => r.campaign_name), sorted.map(r => n(r.change_pct)), '#f59e0b', 'Change %');
+
+  const top8 = [...data].sort((a,b) => n(b.prev_clicks) - n(a.prev_clicks)).slice(0, 8);
+  makeGroupedChart('chart-rate-compare', top8.map(r => r.campaign_name),
+    top8.map(r => n(r.conv_rate_current)), top8.map(r => n(r.conv_rate_previous)),
+    'Current Rate', 'Previous Rate', '#f59e0b', '#d1d5db');
+
+  document.getElementById('table-rate-drop').innerHTML =
+    `<tr><th>Campaign</th><th>Current Rate</th><th>Previous Rate</th><th>Change Abs</th><th>Change %</th><th>Prev Clicks</th></tr>` +
+    data.map(r => `<tr>
+      <td>${shortName(r.campaign_name, 28)}</td>
+      <td>${n(r.conv_rate_current).toFixed(2)}</td>
+      <td>${n(r.conv_rate_previous).toFixed(2)}</td>
+      <td class="${pctColor(r.change_absolute, false)}">${n(r.change_absolute).toFixed(2)}</td>
+      <td class="${pctColor(r.change_pct, false)}">${n(r.change_pct).toFixed(1)}%</td>
+      <td>${r.prev_clicks}</td>
+    </tr>`).join('');
+}
+
+// ── PAGE 3: CPC & CTR ──
+function buildP3() {
+  const data = allData[TABS[2]] || [];
+  const critical = data.filter(r => r.status === 'Critical').length;
+  const avgCpc = data.length ? (data.reduce((s,r) => s + n(r.cpc_spike_pct), 0) / data.length).toFixed(1) : 0;
+  const avgCtr = data.length ? (data.reduce((s,r) => s + n(r.ctr_drop_pct), 0) / data.length).toFixed(1) : 0;
+  const totalSpend = data.reduce((s,r) => s + n(r.current_spend), 0);
+
+  document.getElementById('p3-kpis').innerHTML = [
+    kpiHTML('Critical', critical, `of ${data.length} campaigns`, 'red'),
+    kpiHTML('Avg CPC Spike', avgCpc + '%', 'current vs previous', 'red'),
+    kpiHTML('Avg CTR Drop', avgCtr + '%', 'current vs previous', 'amber'),
+    kpiHTML('Total Spend', '£' + totalSpend.toLocaleString(undefined,{maximumFractionDigits:0}), 'current period', 'blue'),
+  ].join('');
+
+  const top10cpc = [...data].sort((a,b) => n(b.cpc_spike_pct) - n(a.cpc_spike_pct)).slice(0, 10);
+  makeBarChart('chart-cpc-spike', top10cpc.map(r => r.campaign_name), top10cpc.map(r => n(r.cpc_spike_pct)), '#ef4444', 'CPC Spike %');
+
+  const top10ctr = [...data].sort((a,b) => n(b.ctr_drop_pct) - n(a.ctr_drop_pct)).slice(0, 10);
+  makeBarChart('chart-ctr-drop', top10ctr.map(r => r.campaign_name), top10ctr.map(r => n(r.ctr_drop_pct)), '#8b5cf6', 'CTR Drop %');
+
+  document.getElementById('table-cpc').innerHTML =
+    `<tr><th>Campaign</th><th>Status</th><th>Curr CPC</th><th>Prev CPC</th><th>CPC Spike%</th><th>Curr CTR</th><th>Prev CTR</th><th>CTR Drop%</th><th>Spend</th></tr>` +
+    data.map(r => `<tr>
+      <td>${shortName(r.campaign_name, 25)}</td>
+      <td>${statusBadge(r.status)}</td>
+      <td>£${n(r.current_cpc).toFixed(2)}</td>
+      <td>£${n(r.previous_cpc).toFixed(2)}</td>
+      <td class="${pctColor(r.cpc_spike_pct, true)}">${n(r.cpc_spike_pct).toFixed(1)}%</td>
+      <td>${n(r.current_ctr).toFixed(4)}</td>
+      <td>${n(r.previous_ctr).toFixed(4)}</td>
+      <td class="${pctColor(r.ctr_drop_pct, true)}">${n(r.ctr_drop_pct).toFixed(1)}%</td>
+      <td>£${n(r.current_spend).toLocaleString()}</td>
+    </tr>`).join('');
+}
+
+// ── PAGE 4: IMPRESSION ──
+function buildP4() {
+  const data = allData[TABS[3]] || [];
+  const avgDrop = data.length ? (data.reduce((s,r) => s + n(r.drop_pct), 0) / data.length).toFixed(1) : 0;
+  const totalPrevSpend = data.reduce((s,r) => s + n(r.prev_spend), 0);
+
+  document.getElementById('p4-kpis').innerHTML = [
+    kpiHTML('Total Flagged', data.length, 'campaigns', 'blue'),
+    kpiHTML('Avg Impression Drop', avgDrop + '%', '14-day comparison', 'amber'),
+    kpiHTML('Total Prev Spend', '£' + totalPrevSpend.toLocaleString(undefined,{maximumFractionDigits:0}), 'previous 14 days', 'blue'),
+  ].join('');
+
+  const top12 = [...data].sort((a,b) => n(b.drop_pct) - n(a.drop_pct)).slice(0, 12);
+  makeBarChart('chart-impression', top12.map(r => r.campaign_name), top12.map(r => n(r.drop_pct)), '#8b5cf6', 'Drop %');
+
+  const top8 = [...data].sort((a,b) => n(b.current_14_days) - n(a.current_14_days)).slice(0, 8);
+  makeGroupedChart('chart-impression-compare', top8.map(r => r.campaign_name),
+    top8.map(r => n(r.current_14_days)), top8.map(r => n(r.previous_14_days)),
+    'Current 14d', 'Previous 14d', '#8b5cf6', '#d1d5db');
+
+  document.getElementById('table-impression').innerHTML =
+    `<tr><th>Campaign</th><th>Current 14d</th><th>Previous 14d</th><th>Drop %</th><th>Prev Spend</th><th>Date</th></tr>` +
+    data.map(r => `<tr>
+      <td>${shortName(r.campaign_name, 28)}</td>
+      <td>${n(r.current_14_days).toFixed(2)}</td>
+      <td>${n(r.previous_14_days).toFixed(2)}</td>
+      <td class="${pctColor(r.drop_pct, true)}">${n(r.drop_pct).toFixed(1)}%</td>
+      <td>£${n(r.prev_spend).toLocaleString()}</td>
+      <td>${r.report_date || ''}</td>
+    </tr>`).join('');
+}
+
+// ── PAGE 5: SPEND ──
+function buildP5() {
+  const data = allData[TABS[4]] || [];
+  const totalCurr = data.reduce((s,r) => s + n(r.current_7_days), 0);
+  const totalPrev = data.reduce((s,r) => s + n(r.previous_7_days), 0);
+  const avgIncrease = data.length ? (data.reduce((s,r) => s + n(r.increase_pct), 0) / data.length).toFixed(1) : 0;
+
+  document.getElementById('p5-kpis').innerHTML = [
+    kpiHTML('Campaigns Surging', data.length, 'above 20% increase', 'green'),
+    kpiHTML('Total Current Spend', '£' + totalCurr.toLocaleString(undefined,{maximumFractionDigits:0}), '7-day', 'green'),
+    kpiHTML('Total Previous Spend', '£' + totalPrev.toLocaleString(undefined,{maximumFractionDigits:0}), '7-day', 'blue'),
+    kpiHTML('Avg Increase', avgIncrease + '%', 'across flagged campaigns', 'amber'),
+  ].join('');
+
+  const top12 = [...data].sort((a,b) => n(b.increase_pct) - n(a.increase_pct)).slice(0, 12);
+  makeBarChart('chart-spend', top12.map(r => r.campaign_name), top12.map(r => n(r.increase_pct)), '#10b981', 'Increase %');
+
+  const top8 = [...data].sort((a,b) => n(b.current_7_days) - n(a.current_7_days)).slice(0, 8);
+  makeGroupedChart('chart-spend-compare', top8.map(r => r.campaign_name),
+    top8.map(r => n(r.current_7_days)), top8.map(r => n(r.previous_7_days)),
+    'Current 7d', 'Previous 7d', '#10b981', '#d1d5db');
+
+  document.getElementById('table-spend').innerHTML =
+    `<tr><th>Campaign</th><th>Current 7d</th><th>Previous 7d</th><th>Increase %</th><th>Date</th></tr>` +
+    data.map(r => `<tr>
+      <td>${shortName(r.campaign_name, 28)}</td>
+      <td>£${n(r.current_7_days).toLocaleString()}</td>
+      <td>£${n(r.previous_7_days).toLocaleString()}</td>
+      <td class="${pctColor(r.increase_pct, true)}">${n(r.increase_pct).toFixed(1)}%</td>
+      <td>${r.report_date || ''}</td>
+    </tr>`).join('');
+}
+
+async function loadAll() {
+  document.getElementById('last-updated').textContent = 'Fetching latest data...';
+  try {
+    const results = await Promise.all(TABS.map(tab => fetchSheet(tab)));
+    TABS.forEach((tab, i) => allData[tab] = results[i]);
+    buildOverview();
+    buildP1(); buildP2(); buildP3(); buildP4(); buildP5();
+  } catch(e) {
+    document.getElementById('last-updated').textContent = 'Error loading data — check API key & sheet permissions';
+    console.error(e);
+  }
+}
+
+function switchTab(idx) {
+  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', i===idx));
+  document.querySelectorAll('.page').forEach((p,i) => p.classList.toggle('active', i===idx));
+}
+
+loadAll();
+</script>
+</body>
+</html>
