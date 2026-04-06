@@ -45,17 +45,14 @@
   .pct-amber{color:#f59e0b;font-weight:600}
   .pct-green{color:#10b981;font-weight:600}
   .loading{text-align:center;padding:60px;color:#9ca3af;font-size:14px}
-  .error-msg{text-align:center;padding:40px;color:#ef4444;font-size:13px;background:#fff;border-radius:10px;border:1px solid #fecaca}
   .tbl-wrap{overflow-x:auto;max-height:380px;overflow-y:auto}
   .chart-wrap{position:relative;height:220px}
   .bar-mini{display:flex;flex-direction:column;gap:5px;margin-top:4px}
-  .bar-item{display:grid;grid-template-columns:110px 1fr 55px;align-items:center;gap:6px;font-size:11px}
+  .bar-item{display:grid;grid-template-columns:110px 1fr 65px;align-items:center;gap:6px;font-size:11px}
   .bar-name{color:#374151;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .bar-track{height:8px;background:#f3f4f6;border-radius:4px;overflow:hidden}
   .bar-fill{height:100%;border-radius:4px;transition:width .6s ease}
   .bar-val{text-align:right;font-weight:600;font-size:11px}
-  .section-divider{font-size:12px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.6px;margin:20px 0 12px;padding-bottom:6px;border-bottom:1px solid #e5e7eb}
-  .report-date{font-size:11px;background:#eff6ff;color:#3b82f6;padding:3px 8px;border-radius:4px;font-weight:500}
 </style>
 </head>
 <body>
@@ -79,7 +76,6 @@
 
 <div class="content">
 
-  <!-- OVERVIEW PAGE -->
   <div class="page active" id="page-0">
     <div class="kpi-row" id="ov-kpis"><div class="loading">Loading KPIs...</div></div>
     <div class="grid2">
@@ -98,7 +94,6 @@
     </div>
   </div>
 
-  <!-- PAGE 1: CONVERSION DROP DECIMAL -->
   <div class="page" id="page-1">
     <div class="kpi-row" id="p1-kpis"></div>
     <div class="grid3">
@@ -117,7 +112,6 @@
     </div>
   </div>
 
-  <!-- PAGE 2: CONVERSION RATE DROP -->
   <div class="page" id="page-2">
     <div class="kpi-row" id="p2-kpis"></div>
     <div class="grid2">
@@ -136,7 +130,6 @@
     </div>
   </div>
 
-  <!-- PAGE 3: CPC & CTR -->
   <div class="page" id="page-3">
     <div class="kpi-row" id="p3-kpis"></div>
     <div class="grid2">
@@ -155,7 +148,6 @@
     </div>
   </div>
 
-  <!-- PAGE 4: SEARCH IMPRESSION -->
   <div class="page" id="page-4">
     <div class="kpi-row" id="p4-kpis"></div>
     <div class="grid3">
@@ -174,7 +166,6 @@
     </div>
   </div>
 
-  <!-- PAGE 5: SPEND SURGE -->
   <div class="page" id="page-5">
     <div class="kpi-row" id="p5-kpis"></div>
     <div class="grid2">
@@ -208,6 +199,9 @@ const TABS = [
 
 let allData = {};
 let charts = {};
+
+const INR = v => '₹' + n(v).toLocaleString('en-IN', {maximumFractionDigits:0});
+const INRd = v => '₹' + n(v).toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2});
 
 function sheetUrl(tab) {
   return `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(tab)}?key=${API_KEY}`;
@@ -329,16 +323,15 @@ function miniBars(rows, nameField, valField, color, suffix='%', maxRows=8) {
   }).join('');
 }
 
-// ── OVERVIEW ──
 function buildOverview() {
   const conv = allData[TABS[0]] || [];
   const rate = allData[TABS[1]] || [];
-  const cpc = allData[TABS[2]] || [];
-  const imp = allData[TABS[3]] || [];
-  const spend = allData[TABS[4]] || [];
+  const cpc  = allData[TABS[2]] || [];
+  const imp  = allData[TABS[3]] || [];
+  const spend= allData[TABS[4]] || [];
 
   const critical = cpc.filter(r => r.status === 'Critical').length;
-  const warning = cpc.filter(r => r.status === 'Warning').length;
+  const warning  = cpc.filter(r => r.status === 'Warning').length;
   const avgCpcSpike = cpc.length ? (cpc.reduce((s,r) => s + n(r.cpc_spike_pct), 0) / cpc.length).toFixed(1) : 0;
   const avgConvDrop = rate.length ? (rate.reduce((s,r) => s + n(r.change_pct), 0) / rate.length).toFixed(1) : 0;
   const reportDate = conv[0]?.report_date || cpc[0]?.report_date || 'Today';
@@ -348,7 +341,7 @@ function buildOverview() {
   document.getElementById('ov-kpis').innerHTML = [
     kpiHTML('Critical Campaigns', critical, `${warning} warnings`, 'red'),
     kpiHTML('Avg CPC Spike', avgCpcSpike + '%', `across ${cpc.length} campaigns`, 'red'),
-    kpiHTML('Conv. Rate Drop', avgConvDrop + '%', `avg change across ${rate.length} campaigns`, 'amber'),
+    kpiHTML('Conv. Rate Drop', avgConvDrop + '%', `avg across ${rate.length} campaigns`, 'amber'),
     kpiHTML('Impression Drops', imp.length, 'campaigns flagged', 'blue'),
     kpiHTML('Spend Surges', spend.length, 'campaigns ↑20%+', 'green'),
   ].join('');
@@ -356,21 +349,19 @@ function buildOverview() {
   document.getElementById('ov-cpc-bars').innerHTML = miniBars(cpc, 'campaign_name', 'cpc_spike_pct', '#ef4444');
   document.getElementById('ov-conv-bars').innerHTML = miniBars(rate, 'campaign_name', 'change_pct', '#f59e0b');
 
-  // alerts table
   const top = [...cpc].sort((a,b) => n(b.cpc_spike_pct) - n(a.cpc_spike_pct)).slice(0, 10);
-  const tbl = document.getElementById('ov-alerts-table');
-  tbl.innerHTML = `<tr><th>Campaign</th><th>Status</th><th>CPC Spike %</th><th>CTR Drop %</th><th>Current Spend</th><th>Clicks</th></tr>` +
+  document.getElementById('ov-alerts-table').innerHTML =
+    `<tr><th>Campaign</th><th>Status</th><th>CPC Spike %</th><th>CTR Drop %</th><th>Current Spend</th><th>Clicks</th></tr>` +
     top.map(r => `<tr>
       <td>${shortName(r.campaign_name, 30)}</td>
       <td>${statusBadge(r.status)}</td>
       <td class="${pctColor(r.cpc_spike_pct, true)}">${n(r.cpc_spike_pct).toFixed(1)}%</td>
       <td class="${pctColor(r.ctr_drop_pct, true)}">${n(r.ctr_drop_pct).toFixed(1)}%</td>
-      <td>£${n(r.current_spend).toLocaleString()}</td>
+      <td>${INR(r.current_spend)}</td>
       <td>${r.current_clicks}</td>
     </tr>`).join('');
 }
 
-// ── PAGE 1: CONV DROP ──
 function buildP1() {
   const data = allData[TABS[0]] || [];
   const critical = data.filter(r => r.status === 'Critical').length;
@@ -386,7 +377,7 @@ function buildP1() {
   makeBarChart('chart-conv-drop', sorted.map(r => r.campaign_name), sorted.map(r => n(r.drop_pct)), '#ef4444', 'Drop %');
 
   const warn = data.filter(r => r.status === 'Warning').length;
-  makeDoughnut('chart-conv-status', ['Critical', 'Warning', 'Other'], [critical, warn, data.length - critical - warn], ['#ef4444', '#f59e0b', '#d1d5db']);
+  makeDoughnut('chart-conv-status', ['Critical','Warning','Other'], [critical, warn, data.length-critical-warn], ['#ef4444','#f59e0b','#d1d5db']);
 
   document.getElementById('table-conv-drop').innerHTML =
     `<tr><th>Date</th><th>Campaign</th><th>Current 14d</th><th>Previous 14d</th><th>Drop %</th><th>Status</th></tr>` +
@@ -400,7 +391,6 @@ function buildP1() {
     </tr>`).join('');
 }
 
-// ── PAGE 2: CONV RATE ──
 function buildP2() {
   const data = allData[TABS[1]] || [];
   const avgChange = data.length ? (data.reduce((s,r) => s + n(r.change_pct), 0) / data.length).toFixed(1) : 0;
@@ -426,13 +416,12 @@ function buildP2() {
       <td>${shortName(r.campaign_name, 28)}</td>
       <td>${n(r.conv_rate_current).toFixed(2)}</td>
       <td>${n(r.conv_rate_previous).toFixed(2)}</td>
-      <td class="${pctColor(r.change_absolute, false)}">${n(r.change_absolute).toFixed(2)}</td>
-      <td class="${pctColor(r.change_pct, false)}">${n(r.change_pct).toFixed(1)}%</td>
+      <td class="${pctColor(r.change_absolute)}">${n(r.change_absolute).toFixed(2)}</td>
+      <td class="${pctColor(r.change_pct)}">${n(r.change_pct).toFixed(1)}%</td>
       <td>${r.prev_clicks}</td>
     </tr>`).join('');
 }
 
-// ── PAGE 3: CPC & CTR ──
 function buildP3() {
   const data = allData[TABS[2]] || [];
   const critical = data.filter(r => r.status === 'Critical').length;
@@ -444,7 +433,7 @@ function buildP3() {
     kpiHTML('Critical', critical, `of ${data.length} campaigns`, 'red'),
     kpiHTML('Avg CPC Spike', avgCpc + '%', 'current vs previous', 'red'),
     kpiHTML('Avg CTR Drop', avgCtr + '%', 'current vs previous', 'amber'),
-    kpiHTML('Total Spend', '£' + totalSpend.toLocaleString(undefined,{maximumFractionDigits:0}), 'current period', 'blue'),
+    kpiHTML('Total Spend', INR(totalSpend), 'current period', 'blue'),
   ].join('');
 
   const top10cpc = [...data].sort((a,b) => n(b.cpc_spike_pct) - n(a.cpc_spike_pct)).slice(0, 10);
@@ -458,17 +447,16 @@ function buildP3() {
     data.map(r => `<tr>
       <td>${shortName(r.campaign_name, 25)}</td>
       <td>${statusBadge(r.status)}</td>
-      <td>£${n(r.current_cpc).toFixed(2)}</td>
-      <td>£${n(r.previous_cpc).toFixed(2)}</td>
+      <td>${INRd(r.current_cpc)}</td>
+      <td>${INRd(r.previous_cpc)}</td>
       <td class="${pctColor(r.cpc_spike_pct, true)}">${n(r.cpc_spike_pct).toFixed(1)}%</td>
       <td>${n(r.current_ctr).toFixed(4)}</td>
       <td>${n(r.previous_ctr).toFixed(4)}</td>
       <td class="${pctColor(r.ctr_drop_pct, true)}">${n(r.ctr_drop_pct).toFixed(1)}%</td>
-      <td>£${n(r.current_spend).toLocaleString()}</td>
+      <td>${INR(r.current_spend)}</td>
     </tr>`).join('');
 }
 
-// ── PAGE 4: IMPRESSION ──
 function buildP4() {
   const data = allData[TABS[3]] || [];
   const avgDrop = data.length ? (data.reduce((s,r) => s + n(r.drop_pct), 0) / data.length).toFixed(1) : 0;
@@ -477,7 +465,7 @@ function buildP4() {
   document.getElementById('p4-kpis').innerHTML = [
     kpiHTML('Total Flagged', data.length, 'campaigns', 'blue'),
     kpiHTML('Avg Impression Drop', avgDrop + '%', '14-day comparison', 'amber'),
-    kpiHTML('Total Prev Spend', '£' + totalPrevSpend.toLocaleString(undefined,{maximumFractionDigits:0}), 'previous 14 days', 'blue'),
+    kpiHTML('Total Prev Spend', INR(totalPrevSpend), 'previous 14 days', 'blue'),
   ].join('');
 
   const top12 = [...data].sort((a,b) => n(b.drop_pct) - n(a.drop_pct)).slice(0, 12);
@@ -495,12 +483,11 @@ function buildP4() {
       <td>${n(r.current_14_days).toFixed(2)}</td>
       <td>${n(r.previous_14_days).toFixed(2)}</td>
       <td class="${pctColor(r.drop_pct, true)}">${n(r.drop_pct).toFixed(1)}%</td>
-      <td>£${n(r.prev_spend).toLocaleString()}</td>
+      <td>${INR(r.prev_spend)}</td>
       <td>${r.report_date || ''}</td>
     </tr>`).join('');
 }
 
-// ── PAGE 5: SPEND ──
 function buildP5() {
   const data = allData[TABS[4]] || [];
   const totalCurr = data.reduce((s,r) => s + n(r.current_7_days), 0);
@@ -509,8 +496,8 @@ function buildP5() {
 
   document.getElementById('p5-kpis').innerHTML = [
     kpiHTML('Campaigns Surging', data.length, 'above 20% increase', 'green'),
-    kpiHTML('Total Current Spend', '£' + totalCurr.toLocaleString(undefined,{maximumFractionDigits:0}), '7-day', 'green'),
-    kpiHTML('Total Previous Spend', '£' + totalPrev.toLocaleString(undefined,{maximumFractionDigits:0}), '7-day', 'blue'),
+    kpiHTML('Total Current Spend', INR(totalCurr), '7-day', 'green'),
+    kpiHTML('Total Previous Spend', INR(totalPrev), '7-day', 'blue'),
     kpiHTML('Avg Increase', avgIncrease + '%', 'across flagged campaigns', 'amber'),
   ].join('');
 
@@ -526,8 +513,8 @@ function buildP5() {
     `<tr><th>Campaign</th><th>Current 7d</th><th>Previous 7d</th><th>Increase %</th><th>Date</th></tr>` +
     data.map(r => `<tr>
       <td>${shortName(r.campaign_name, 28)}</td>
-      <td>£${n(r.current_7_days).toLocaleString()}</td>
-      <td>£${n(r.previous_7_days).toLocaleString()}</td>
+      <td>${INR(r.current_7_days)}</td>
+      <td>${INR(r.previous_7_days)}</td>
       <td class="${pctColor(r.increase_pct, true)}">${n(r.increase_pct).toFixed(1)}%</td>
       <td>${r.report_date || ''}</td>
     </tr>`).join('');
@@ -541,7 +528,7 @@ async function loadAll() {
     buildOverview();
     buildP1(); buildP2(); buildP3(); buildP4(); buildP5();
   } catch(e) {
-    document.getElementById('last-updated').textContent = 'Error loading data — check API key & sheet permissions';
+    document.getElementById('last-updated').textContent = 'Error — check API key & sheet permissions';
     console.error(e);
   }
 }
